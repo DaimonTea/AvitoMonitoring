@@ -94,16 +94,19 @@ internal class GetWebpage(GetUserInfo userInfo)
             }
             catch (TaskCanceledException timeout)
             {
-                string message = $"Не удалось установить подключение к сайту Авито спустя 15 секунд. Отправка запросов остановлена на 5 минут. Опрашиваемый адрес:\n{urlGet}\nСообщение:\n{timeout.Message}";
+                string message = $"Не удалось установить подключение к сайту Авито спустя 15 секунд. Отправка запросов остановлена на 1 минуту. Опрашиваемый адрес:\n{urlGet}\nСообщение:\n{timeout.Message}";
                 await SendWarning(message);
+                await Task.Delay(TimeSpan.FromMinutes(2));
+                lockConnections.Release();
             }
             catch (HttpRequestException reqex)
             {
-                string message = $"Не удалось установить подключение к сайту Авито. Отправка запросов остановлена на 5 минут. Опрашиваемый адрес:\n{urlGet}\nСообщение:\n{reqex.Message}";
+                string message = $"Не удалось установить подключение к сайту Авито. Отправка запросов остановлена на 1 минуту. Опрашиваемый адрес:\n{urlGet}\nСообщение:\n{reqex.Message}";
                 await SendWarning(message);
+                await Task.Delay(TimeSpan.FromMinutes(2));
+                lockConnections.Release();
             }
         }
-
 
         return string.Empty;
     }
