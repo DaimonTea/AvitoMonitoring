@@ -7,6 +7,11 @@ class Program
     static async Task Main(string[] args)
     {
         var userInfo = await GetUserInfo.CreateProgramInstance();
+        if (userInfo.telegramUserId == 0)
+        {
+            Console.ReadKey();
+            return;
+        }
 
         var getWebpage = new GetWebpage(userInfo);
         getWebpage.SetHttpClient();
@@ -14,10 +19,10 @@ class Program
 
         while (true)
         {
-            await Task.Delay(1000);
             string? sWebpage = await getWebpage.GetContents();
-            if (string.IsNullOrEmpty(sWebpage)) { System.Console.WriteLine("страницы типо нет"); continue; }
+            if (string.IsNullOrEmpty(sWebpage)) { System.Console.WriteLine("Получена пустая страница."); continue; }
             else await getWebpage.FetchWebpage(sWebpage);
+            userInfo.linkChoice++;
         }
     }
 }

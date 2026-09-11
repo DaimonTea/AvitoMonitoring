@@ -18,20 +18,20 @@ internal class GetWebpage(GetUserInfo userInfo)
                                    | DecompressionMethods.Brotli
     });
     Random random = new();
-    Semaphore lockConnections = new(name: "Global\\AvitoMonitoringSynchronization", initialCount: 1, maximumCount: 20);
+    SemaphoreSlim lockConnections = new(1);
 
     internal async Task<string?> GetContents()
     {
-        string urlGet = userInfo.linkCheck;
+        string urlGet = userInfo.linkCheck![userInfo.linkChoice];
+        Console.WriteLine($"Выбрана {userInfo.linkChoice + 1} ссылка из группы.");
 
         Console.WriteLine("Ожидаю освобождения семафора...");
-        lockConnections.WaitOne();
+        await lockConnections.WaitAsync();
         {
             Console.WriteLine("Семафор захвачен. Получаю информацию от Авито...");
             try
             {
                 var webpage = await httpCli.GetAsync(urlGet);
-                System.Console.WriteLine("получаю сайт");
 
                 int statusCode = (int)webpage.StatusCode;
                 if (statusCode.ToString()[0] != '2')
@@ -65,6 +65,7 @@ internal class GetWebpage(GetUserInfo userInfo)
                             return string.Empty;
                     }
                 }
+                Console.WriteLine("Сайт получен.");
 
                 byte[] temp = await webpage.Content.ReadAsByteArrayAsync();
                 string webpageContent = Encoding.UTF8.GetString(temp);
@@ -129,12 +130,12 @@ internal class GetWebpage(GetUserInfo userInfo)
 
                 if (infoId.HasRows) continue;
             }
-            if (itemInfo.ItemPriceInformation!.ItemPrice > userInfo.priceLimit) continue;
+            if (itemInfo.ItemPriceInformation!.ItemPrice > userInfo.priceLimit![userInfo.linkChoice]) continue;
             long timeNow = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             byte minutesPassed = (byte)((timeNow - (itemInfo.ItemTimeStamp / 1000)) / 60);
             if (timeNow - (itemInfo.ItemTimeStamp / 1000) > 3600) continue;
 
-            System.Console.WriteLine($"{itemInfo!.ItemId} прошёл все проверки");
+            Console.WriteLine($"Объявление {itemInfo.ItemId} прошло все проверки. Пробую отправить...");
 
             /*var imagesArray = element.GetProperty("images").EnumerateArray();
             foreach (var link in imagesArray)
@@ -176,10 +177,10 @@ internal class GetWebpage(GetUserInfo userInfo)
             }
         }
 
-        int waitSeconds = random.Next(16, 19);
+        Console.WriteLine("Действие совершено. Ожидаю начало следующего цикла...");
+        int waitSeconds = random.Next(20, 23);
         await Task.Delay(TimeSpan.FromSeconds(waitSeconds));
         lockConnections.Release();
-        await Task.Delay(TimeSpan.FromSeconds(userInfo.delaySeconds - waitSeconds));
         return;
     }
 
@@ -260,7 +261,7 @@ internal class GetWebpage(GetUserInfo userInfo)
                 }
             }
 
-            if (level < 1) { return jsonFile.Substring(startingIndex - 1, i - startingIndex + 2); }
+            if (level < 1) { Console.WriteLine("Список объявлений получен."); return jsonFile.Substring(startingIndex - 1, i - startingIndex + 2); }
         }
 
         return string.Empty;

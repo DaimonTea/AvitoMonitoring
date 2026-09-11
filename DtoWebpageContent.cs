@@ -15,7 +15,7 @@ internal class AvitoInfo
 
     [JsonPropertyName("allowTimeStamp")]
     public long ItemTimeStamp { get; set; }
-
+    
     public string? ItemImageLink { get; set; }
 
     [JsonPropertyName("priceDetailed")]

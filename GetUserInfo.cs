@@ -8,25 +8,74 @@ namespace AvitoMonitoring;
 internal class GetUserInfo
 {
     internal TelegramBotClient? telegramBotInstance;
-    internal long telegramUserId;
-    internal string linkCheck = string.Empty;
-    internal int priceLimit;
-    internal int delaySeconds;
+    internal long telegramUserId = 0;
+    internal List<string>? linkCheck { get; set; } = new();
+    internal int linkChoice
+    {
+        get; set
+        {
+            if (value >= linkCheck!.Count)
+            {
+                field = 0;
+            }
+            else field = value;
+        }
+    } = 0;
+    internal List<int> priceLimit = new();
 
     internal static async Task<GetUserInfo> CreateProgramInstance()
     {
         var userInfoClass = new GetUserInfo();
 
-        userInfoClass.linkCheck = userInfoClass.GetCategoryLink();
         userInfoClass.telegramBotInstance = await userInfoClass.GetBotToken();
-        userInfoClass.telegramUserId = await userInfoClass.GetUserId();
-        userInfoClass.delaySeconds = userInfoClass.GetDelay();
-        userInfoClass.priceLimit = userInfoClass.GetPriceLimit();
+
+        userInfoClass.ImportPriceLimits();
+        userInfoClass.ImportCategoryLinks();
+        if (userInfoClass.linkCheck!.Count != userInfoClass.priceLimit!.Count)
+        {
+            userInfoClass.telegramUserId = 0;
+            Console.Clear();
+            Console.WriteLine("Количество ссылок и лимитов из userinfo.json не совпадает. Убедитесь, что в конфигурационном файле нет ошибок, и перезапустите программу.\n"
+            + $"Количество рабочих ссылок: {userInfoClass.linkCheck.Count}; Количество ценовых лимитов: {userInfoClass.priceLimit.Count}.");
+        }
+        else
+        {
+            await userInfoClass.GetCategoryLink();
+            userInfoClass.telegramUserId = await userInfoClass.GetUserId();
+        }
 
         return userInfoClass;
     }
 
-    string GetCategoryLink()
+    void ImportCategoryLinks()
+    {
+        try
+        {
+            using (JsonDocument userinfo = JsonDocument.Parse(File.ReadAllText("userinfo.json")))
+            {
+                var root = userinfo.RootElement[0];
+
+                var links = root.GetProperty("link-check").EnumerateArray();
+                foreach (var link in links)
+                {
+                    try
+                    {
+                        if (string.IsNullOrEmpty(link.GetString())) continue;
+                        CheckAddLink(link.GetString()!);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                }
+            }
+
+            Console.WriteLine($"Импортировано {linkCheck!.Count} ссылок из userinfo.json.");
+        }
+        catch { }
+    }
+
+    async Task GetCategoryLink()
     {
         Console.WriteLine("""
         Небольшой, но важный совет, чтобы правильно вставить ссылку.
@@ -46,19 +95,29 @@ internal class GetUserInfo
         Данный текст показывается только один раз, но если вам нужна более детальная информация по работе с программой, перейдите в соответствующий репозиторий по ссылке https://github.com/DaimonTea/AvitoMonitoring/. 
         """);
 
+        string inputLink = string.Empty;
+        if (linkCheck!.Count == 0)
+        {
+            while (true)
+            {
+                Console.Write("Пожалуйста, вставьте ссылку для отслеживания: ");
+                inputLink = Console.ReadLine() ?? string.Empty;
+                if (string.IsNullOrEmpty(inputLink)) { Console.Clear(); Console.WriteLine("Ссылка не может быть пустой."); continue; }
+                if (!CheckAddLink(inputLink)) continue;
+                priceLimit!.Add(GetPriceLimit());
+                break;
+            }
+        }
+
         while (true)
         {
-            Console.Write("Пожалуйста, вставьте ссылку для отслеживания: ");
-
-            string inputLink = Console.ReadLine() ?? string.Empty;
-            if (string.IsNullOrEmpty(inputLink)) { Console.Clear(); Console.WriteLine("Ссылка не может быть пустой."); continue; }
-            if (!inputLink.StartsWith("https://")) inputLink = "https://" + inputLink;
-
-            if (!inputLink.Contains("avito.ru/")) { Console.Clear(); Console.WriteLine("Вы должны вставить ссылку на страницу Авито."); continue; }
-
             Console.Clear();
-            Console.WriteLine("Ссылка определена.");
-            return inputLink;
+            Console.Write($"Сохранено {linkCheck.Count} ссылок.\nНажмите Enter для перехода к вводу токена, или введите следующую ссылку для отслеживания: ");
+            inputLink = Console.ReadLine() ?? string.Empty;
+            if (string.IsNullOrEmpty(inputLink)) { Console.Clear(); return; }
+
+            if (!CheckAddLink(inputLink)) continue;
+            priceLimit!.Add(GetPriceLimit());
         }
     }
 
@@ -78,6 +137,32 @@ internal class GetUserInfo
                 Console.WriteLine("Указано неправильное значение.");
             }
         }
+    }
+
+    void ImportPriceLimits()
+    {
+        try
+        {
+            using (JsonDocument userinfo = JsonDocument.Parse(File.ReadAllText("userinfo.json")))
+            {
+                var root = userinfo.RootElement[0];
+
+                var prices = root.GetProperty("price-limit").EnumerateArray();
+                foreach (var price in prices)
+                {
+                    try
+                    {
+                        priceLimit!.Add(price.GetInt32());
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Console.WriteLine(ex.Message);
+                        continue;
+                    }
+                }
+            }
+        }
+        catch { }
     }
 
     async Task<TelegramBotClient> GetBotToken()
@@ -184,40 +269,11 @@ internal class GetUserInfo
         }
     }
 
-    int GetDelay()
+    bool CheckAddLink(string inputLink)
     {
-        Console.Clear();
-        Console.WriteLine("""
-        Совет по назначению задержки.
-
-        Для выставления задержки следует придерживаться двух правил:
-        задержка должна быть не меньше 20-25 секунд (в зависимости от скорости интернета), если запущен только 1 инстанс данной программы,
-        а при запуске нескольких процессов задержка должна быть не меньше ((от 20 до 25 в зависимости от интернета) * количество запущенных экземпляров программы) секунд.
-        Эти правила соблюдаются для того, чтобы не получить IP-бан/капчу от Авито, и чтобы в программе(-ах) не накапливалась очередь из запросов.
-
-        Данный текст показывается только один раз, но если вам нужна более детальная информация по работе с программой, перейдите в соответствующий репозиторий по ссылке https://github.com/DaimonTea/AvitoMonitoring/.
-        """);
-
-        while (true)
-        {
-            Console.Write("Введите задержку между запросами в секундах: ");
-            string sDelay = Console.ReadLine() ?? string.Empty;
-
-            int delay = 0;
-            if (int.TryParse(sDelay, out delay))
-            {
-                if (delay < 20)
-                {
-                    Console.Clear();
-                    Console.WriteLine("Ставить задержку меньше 20 секунд категорически не рекомендуется.");
-                    continue;
-                }
-                else
-                {
-                    return delay;
-                }
-            }
-            else { Console.Clear(); Console.WriteLine("Неправильно указана задержка."); }
-        }
+        if (!inputLink.StartsWith("https://")) inputLink = "https://" + inputLink;
+        if (!inputLink.Contains("avito.ru/")) { Console.Clear(); Console.WriteLine("Вы должны вставить ссылку на страницу Авито."); return false; }
+        linkCheck!.Add(inputLink);
+        return true;
     }
 }
