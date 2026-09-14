@@ -70,6 +70,16 @@ internal class GetWebpage(GetUserInfo userInfo)
                 byte[] temp = await webpage.Content.ReadAsByteArrayAsync();
                 string webpageContent = Encoding.UTF8.GetString(temp);
 
+                using (var connection = new SqliteConnection(SetupSqlite.Path))
+                {
+                    await connection.OpenAsync();
+
+                    using var addToCounter = new SqliteCommand("UPDATE DataCounter SET kbCount = kbCount + $webpageSize WHERE id = $InstanceId", connection);
+                    addToCounter.Parameters.AddWithValue("$webpageSize", temp.Length / 1024);
+                    addToCounter.Parameters.AddWithValue("$InstanceId", SetupSqlite.InstanceId);
+                    await addToCounter.ExecuteNonQueryAsync();
+                }
+
                 if (string.IsNullOrEmpty(webpageContent))
                 {
                     Console.WriteLine("Полученная веб-страница не содержит какой-либо информации.");
@@ -124,7 +134,7 @@ internal class GetWebpage(GetUserInfo userInfo)
             {
                 await connection.OpenAsync();
 
-                var checkIfSentAlready = new SqliteCommand("SELECT 1 FROM items WHERE id = $id", connection);
+                var checkIfSentAlready = new SqliteCommand("SELECT 1 FROM Items WHERE id = $id", connection);
                 checkIfSentAlready.Parameters.AddWithValue("$id", itemInfo!.ItemId);
                 var infoId = await checkIfSentAlready.ExecuteReaderAsync();
 
@@ -167,7 +177,7 @@ internal class GetWebpage(GetUserInfo userInfo)
 
                 using var connection = new SqliteConnection(SetupSqlite.Path);
                 await connection.OpenAsync();
-                var recordSentItem = new SqliteCommand("INSERT INTO items (id) VALUES ($id)", connection);
+                var recordSentItem = new SqliteCommand("INSERT INTO Items (id) VALUES ($id)", connection);
                 recordSentItem.Parameters.AddWithValue("$id", itemInfo.ItemId);
                 await recordSentItem.ExecuteNonQueryAsync();
             }

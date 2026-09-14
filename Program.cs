@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using Telegram.Bot.Types;
 
 namespace AvitoMonitoring;
 
@@ -16,6 +17,9 @@ class Program
         var getWebpage = new GetWebpage(userInfo);
         getWebpage.SetHttpClient();
         await SetupSqlite.SetDatabase();
+
+        var commands = new TelegramCommands(userInfo);
+        userInfo.telegramBotInstance!.OnMessage += commands.DecideMessage;
 
         while (true)
         {
